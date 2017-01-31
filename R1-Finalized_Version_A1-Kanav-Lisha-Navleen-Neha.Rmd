@@ -1,0 +1,596 @@
+---
+title: 'International Tourism'
+author: "Kanav Katyal, Lisha Jiahui Li, Navleen Surjit Khanuja and Neha Hajela"
+date: "October 24, 2016"
+output: 
+  html_document:
+    toc: yes
+---
+
+# 1. Introduction
+The world bank, founded in 1944, is a crucial source that delivers technical and financial assistance to developing countries in order to reduce poverty and support growth. The world bank data provides free and open access to development data for over 200 countries on topics such as health, education, environment, tourism and infrastructure. 
+
+World Development Indicators (WDI), the primary data collection for the world bank data, offer present and accurate global development data. These indicators provide cross-country comparable statistics on topics including but not limited to Agriculture & Rural Development, Aid Effectiveness, Climate Change, Economy & Growth, Education, Gender, Health, Infrastructure and Trade. The team will conduct analysis based on the data selected from  World Development Indicators that are directly or indirectly related to tourism.
+
+# 2. Objective
+Over decades, tourism has been developing as one of the fastest growing economic sectors in the world. A lot of factors such as infrastructure, environment and economic development can have an impact on international tourism. On the other hand, many factors can be influenced by tourism, such as economic development and environment. 
+
+Our objective is to analyze the relationship between these factors and the growth of international tourism. To observe the effect on tourism we have chosen to conduct our study on developed, developing and underdeveloped countries and monitor their progress for the past 20 years.
+
+# 3. Dataset Preparation
+Our analysis focuses on the data of last 20 years(1995-2015) of 6 countries (United States, United Kingdom, China, India, Nigeria, and South Africa). The countires that we have chosen represent developed, developing, and underdeveloped countries. The countries are as follows:
+
+|Level of Development|Countries|
+|--------------------|---------|
+|Developed           |United States, United Kingdom|
+|Developing          |China, India|
+|Underdeveloped      |Nigeria, South Africa|
+
+The following libraries have been used in the analysis:
+```{r, message=FALSE}
+library(magrittr)
+ilibrary(WDI)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+```
+
+We've loaded the WDI data with various indicators data set from the World Bank.
+```{r, message=FALSE}
+wdi.df = read_csv("C:/Users/Kanav/Desktop/Data Science MA 799/26th Sept Class/WDI_csv/WDI_Data.csv")
+```
+
+The variables in our data set have been renamed by removing the spaces in order to make them easier to refer to during the analysis.
+```{r, message=FALSE}
+wdi.df %>%
+  rename(country.code   = `Country Code`,
+         country.name   = `Country Name`,
+         indicator.name = `Indicator Name`,
+         indicator.code = `Indicator Code`) %>%
+  {.} -> wdi.df
+```
+
+To observe the influence on tourism in the different countries, we have converted the country code and indicator code into a factor variable. This makes it easier to filter for the countries and indicators we want to focus on.
+```{r, message=FALSE}
+wdi.df$indicator.code = factor(wdi.df$indicator.code)
+wdi.df$country.code = factor(wdi.df$country.code)
+```
+
+The code below displays year and value data as columns in the data set.
+```{r, message=FALSE}
+wdi.df %>%
+  gather(., 
+         year, value, 
+         -country.name, -country.code, -indicator.name, -indicator.code) %>%
+  {.} -> wdi.df
+```
+
+Since our analysis focuses on United States, United Kingdom, China, India, Nigeria, and South Africa, using the data for the past 20 years (1915-2015), we filtered on the country code and year.
+
+```{r}
+wdi.df %>%
+ 
+  filter(year>2000) %>%
+  {.}-> wdi.df
+```
+
+In order to choose the indicators that have enough valid data related to tourism, the team filtered on percent missing value (less than 25%). Then we get a list of eligible indicators to choose from. We named the dataset as "wdi.dfPctmissing".
+```{r, message=FALSE}
+wdi.df %>%
+  group_by(indicator.code) %>%
+  summarize(count          = n(),
+            cnt.missing    = sum(is.na(value)),
+            pct.missing    = 100*cnt.missing/count,
+            indicator.name = str_sub(first(indicator.name),1,20)) %>%
+  filter(pct.missing < 75) %>%
+  arrange(pct.missing) %>%
+  select(indicator.name, indicator.code, pct.missing) %>%
+  {.}-> wdi.dfPctmissing
+```
+
+The code below displays part of the wdi.dfPctmissing dataset.
+```{r}
+print(wdi.dfPctmissing, n=10)
+```
+
+From the qualified indicators in the wdi.dfPctmissing dataset, the team has chosen the ones that are most relevant to the objective of our project and that have <= 5% missing values.
+
+The table below lists the indicators that will be used for the analysis on Tourism. All indicators are numeric variables. 
+
+|    Variable      | Indicator Code|Unit|                                       Description                                                           |  
+|-----------------------|----|---|--------------------------------------------------------------------------------------------------------------------|
+|International tourism, receipts|ST.INT.RCPT.CD|$|Expenditures by international inbound visitors, including payments to national carriers for international transport|
+|International tourism, expenditures for travel items| ST.INT.TVLX.CD | $ |  Expenditures of international outbound visitors in other countries |
+|GDP per capita| NY.GDP.PCAP.CD | $ | Gross domestic product divided by midyear population| 
+|Air transport, registered carrier departures worldwide| IS.AIR.DPRT | |Domestic takeoffs and takeoffs abroad of air carriers registered in the country|
+|Improved sanitation facilities (% of population with access)| SH.STA.ACSN | % |Access to improved sanitation facilities refers to the percentage of the population using improved sanitation facilities |
+|Rail lines (total route-km)| IS.RRS.TOTL.KM  | km | The length of railway route available for train service, irrespective of the number of parallel tracks| 
+|International tourism, number of arrival| ST.INT.ARVL |     |The number of tourists who travel to a country other than that in which they have their usual residence | 
+|Air Passengers carried| IS.AIR.PSGR||Air passengers carried include both domestic and international aircraft passengers of air carriers registered in the country | 
+|Unemployment, total (% of total labor force)| SL.UEM.TOTL.ZS  | % |The share of the labor force that is without work but available for and seeking employment| 
+|Foreign direct investment, net inflows (BoP, current US$)| BX.KLT.DINV.CD.WD | $ |Direct investment equity flows in the reporting economy |
+|Travel services (% of commercial service imports)| TX.VAL.TRVL.ZS.WT |  %   | Travel services (% of commercial service imports) covers goods and services acquired from an economy by travelers| 
+|Services, etc., value added (current US$)| NV.SRV.TETC.CD | $ |The money spent on services sectors, such as restaurants and hotels | 
+
+We filtered on the indicators that we will be analyzing, then we've got the dataset for analysis.
+```{r}
+wdi.df %>%
+  filter(indicator.code %in% c("ST.INT.RCPT.CD",
+                               "ST.INT.TVLX.CD",
+                               "NY.GDP.PCAP.CD",
+                               "SL.UEM.TOTL.ZS",
+                               "IS.AIR.DPRT",
+                               "SH.STA.ACSN",
+                               "IS.RRS.TOTL.KM",
+                               "ST.INT.ARVL", 
+                               "IS.AIR.PSGR",
+                               "BX.KLT.DINV.CD.WD",
+                               "NV.SRV.TETC.CD",
+                               "TX.VAL.TRVL.ZS.WT")) %>%
+  {.} -> wdi.df
+```
+
+The code below converted the chosen indicator codes and values into columns, so that each indicator contains data in its own column.
+```{r}
+wdi.df %>%
+  select(-indicator.name) %>%
+  spread(indicator.code,value) %>%
+  {.} -> wdi.df
+```
+
+We renamed the indicators in order to make them easier to understand and refer to during the analysis.
+```{r}
+wdi.df %>%
+  rename(Tourism.Receipts = ST.INT.RCPT.CD,
+         Tourism.Expenditure.travel = ST.INT.TVLX.CD,
+         GDP.per.capita = NY.GDP.PCAP.CD,
+         Unemployment.Rate = SL.UEM.TOTL.ZS,
+         Air.Departures = IS.AIR.DPRT,
+         Sanitation.Access = SH.STA.ACSN,
+         Rail.Lines = IS.RRS.TOTL.KM,
+         Number.of.arrivals = ST.INT.ARVL,
+         Air.passengers = IS.AIR.PSGR,
+         Tourism.FDI   = BX.KLT.DINV.CD.WD,
+         Tourism.services = NV.SRV.TETC.CD,
+         Tourism.travelServices = TX.VAL.TRVL.ZS.WT)%>%
+  {.} -> wdi.df
+```
+Our dataset contains 120 rows and 15 columns. 120 rows consist of 20 years' of data for each country and we've chosen 6 countries here; 15 columns consist of country name, country code, year, and 12 indicators. 
+
+The code below displays our dataset for China as an example:
+```{r}
+print(wdi.df, n=20)
+```
+The team will summarize the dataset using dplyr functions in the varibles summary section.
+
+# 4. Goals
+This project seeks to identify the factors that contribute to the development of tourism in a country. By summarizing variables such as Tourism Expenditures, GDP, Improved Sanitation, Air departures, Unemployment rate and Travel Services, our team will try to explain the relationship of tourism to these factors and vice-versa. 
+
+For instance, we would like to test our hypotheses that access to improved sanitation provides a boost to the tourism industry of a country. Similarly, we would like to determine if it makes sense for underdeveloped countries like Nigeria to invest in infrastructure facilities such as air departures and rail lines, in order to improve the tourism of a country.
+
+The process that we will adopt to achieve these goals is described below:
+
+1. For each of the 12 chosen variables, summary statistics such as mean, median, minimum and maximum values would be obtained. These statistics will provide information on whether each variable has positive or negative impact on tourism.
+    
+2. We will then perform a quartile analysis for these variables to find the countries that are the worst performing (1st Quartile) and the best performing countries (top 25 percentile) on these variables. This will tell us how the level of development in a particular country impacts tourism and related factors.      
+
+3. Using dplyr commands such as summarise and group by, we will also compare the mean of the variables to one another. This will help to visually check for any correlation that exists between these sets of variables.
+    
+4. Finally, we plan to sum up these findings to test our hypotheses that these variables impact the tourism of a country.
+
+
+# 5. Variable Summaries
+The team conducted basic statistical analysis and quartile analysis to derive data summary for the twelve indicators we have chosen. Additionally, we found some relationships between these indicators. These analyses will be discussed in the following sections.
+
+## 5.1 Individual Indicator Summary
+The team used dplyr functions, such as summarize, group_by, min, max, mean, and median to display the statistical results for the indicators.
+
+### 5.1.1 International tourism, receipts
+We are using the code below to summarize the tourism receipts data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minTouRec=min(Tourism.Receipts,na.rm=TRUE),
+          maxTouRec=max(Tourism.Receipts,na.rm=TRUE),
+          meanTouRec=mean(Tourism.Receipts,na.rm=TRUE),
+          medianTouRec=median(Tourism.Receipts,na.rm=TRUE))
+```
+From tourism receipts data summary results, the team learned that United States, as a developed country, has the highest average tourism receipts of about $140.7 billion, which is about 396 times of the Nigeria with the lowest tourism receipts of $355.4 million. There is a huge tourism receipts difference between developed and underdeveloped countries.
+
+The code below created the function to generate quartile statistics for all the indicators. (We won't repeat this step for the rest of indicators.)
+```{r, message=FALSE}
+make.ntiles = function (inputvar, n) { 
+  inputvar %>%
+    quantile(., 
+             (1/n) * 1:(n-1),
+             na.rm=TRUE
+    ) %>%
+    c(-Inf, ., Inf) %>%
+    cut(inputvar, 
+        breaks=., 
+        paste("Q", 1:n, sep="")
+    ) 
+}
+```
+
+We used the code below to factor the category variable and derive quartile results for tourism receipts. 
+```{r, message=FALSE}
+Rec<-data.frame(wdi.df$Tourism.Receipts)
+Rec %>%
+  mutate(Tourism.Receipts.factor = make.ntiles(wdi.df.Tourism.Receipts, 4)) %>%
+  {.} -> Rec
+```
+Here is the quartile statistics for tourism receipts indicator:
+```{r}
+summary(Rec)
+```
+The quartile result indicates that both United States and United Kingdom are in the third quartile, which means for the past 20 years international inbound visitors to UK and US had larger expenditures compared with India, China, Nigeria, and South Africa. 
+
+Therefore, the team found that tourism could be an essential source to drive economic growth. Developing and underdeveloped countries could make progress on tourism in order to improve their economy. 
+
+### 5.1.2 International tourism, expenditures for travel items
+We are using the code below to summarize the tourism expenditures data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code),           
+          minTouExp=min(Tourism.Expenditure.travel,na.rm=TRUE),
+          maxTouExp=max(Tourism.Expenditure.travel,na.rm=TRUE),
+          meanTouExp=mean(Tourism.Expenditure.travel,na.rm=TRUE),
+          medianTouExp=median(Tourism.Expenditure.travel,na.rm=TRUE))
+```
+According to the data summary, we have learned that US (average travel item expenditure of $77.35 billion) has the highest tourism expenditure and Nigeria (average travel item expenditure of $3.1 billion) has the lowest tourism expenditure among the six countries. 
+
+We used the code below to factor the category variable and derive quartile results for tourism expenditure.
+```{r, message=FALSE}
+Exp<-data.frame(wdi.df$Tourism.Expenditure.travel)
+Exp %>%
+  mutate(Tourism.Expenditure.travel.factor = make.ntiles(wdi.df.Tourism.Expenditure.travel, 4)) %>%
+  {.} -> Exp
+```
+
+Here is the quartile statistics for tourism expenditure indicator:
+```{r}
+summary(Exp)
+```
+Based on the quartile statistics, the first quartile of tourism expenditure on travel items is $3.384 billion. Nigeria and South Africa are in the first quartile with $3.5 billion and $3.17 billion respectively. From the result, we learned that people from underdeveloped countries have less expenditure on travel items than people from developing and developed countries in general.
+
+Thus, we speculate that people in developing countries are more willing to spend money on travel compared with less developed countries. Travel expenditure of the people in a country can also reflect the economic status of that country.
+
+### 5.1.3 GDP per capita
+We are using the code below to summarize the GDP per capita data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code),          
+            minGDPper=min(GDP.per.capita,na.rm=TRUE),
+            maxGDPper=max(GDP.per.capita,na.rm=TRUE),
+            meanGDPper=mean(GDP.per.capita,na.rm=TRUE),
+            medianGDPper=median(GDP.per.capita,na.rm=TRUE))
+```
+Based on the statistics summary of GDP per capita, we can see United States has the highest Gross Domestic Product, with an average of $43,469.6779, which is followed by United Kingdom, with an average of $35,903.6323. India has the lowest GDP among these 6 countries, with an average of $897.1438. 
+
+We used the code below to factor the category variable and derive quartile results for GDP per capita.
+```{r, message=FALSE}
+GDP<-data.frame(wdi.df$GDP.per.capita)
+GDP %>%
+  mutate(GDP.per.capita.factor = make.ntiles(wdi.df.GDP.per.capita, 4)) %>%
+  {.} -> GDP
+```
+Here is the quartile statistics for GDP per capita indicator:
+```{r}
+summary(GDP)
+```
+According to the quartile statistics, the third quartile of GDP per capita is $32,668.6. The GDP of the two developed countries, United Kingdom and United States, are in the third quartile. The GDP per capita of China, India, Nigeria, and South Africa are still far behind United Kingdom and United States. 
+
+From this result, we can learn that developed countries have a high GDP compared with the other developing and underdeveloped countries. GDP can reflect the economic status of a country. At the same time, tourism can play an important role on GDP according to the Tourism Receipts and Expenditures analysis.
+
+### 5.1.4 Unemployment, total (% of total labor force)
+We are using the code below to summarize the unemployment rate data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code),
+          minUnempRt=min(Unemployment.Rate,na.rm=TRUE),
+          maxUnempRt=max(Unemployment.Rate,na.rm=TRUE),
+          meanUnempRt=mean(Unemployment.Rate,na.rm=TRUE),
+          medianUnempRt=median(Unemployment.Rate,na.rm=TRUE))
+```
+According to the statistics summary of unemployment rate, South Africa (24.45%) has the highest average unemployment rate. The other five country's unemployment rate were listed from the highest to lowest as shown below:
+
+1. Nigeria (7.57%)
+2. United Kingdom (6.28%)
+3. United States (6.12%)
+4. China (4.4%)
+5. India (3.96%) 
+
+Underdeveloped countries tends to have a higher unemployment rate compared with developing and developed countries. 
+
+We used the code below to factor the category variable and derive quartile results for unemployment rate.
+```{r, message=FALSE}
+Unem<-data.frame(wdi.df$Unemployment.Rate)
+Unem %>%
+  mutate(Unemployment.Rate.factor = make.ntiles(wdi.df.Unemployment.Rate, 4)) %>%
+  {.} -> Unem
+```
+
+Here is the quartile statistics for unemployment rate indicator:
+```{r}
+summary(Unem)
+```
+Based on the quartile statistics, we can tell that India, with an average unemployment rate of 3.96%, is within the first quartile, and China ranks behind India in the second quartile. The average unemployment rates of United States (6.12%) and United Kingdom (6.28%) are in the third quartile, which are higher than China and India. The team found that developed countries might still have higher unemployment rate than developing countries.  
+
+### 5.1.5 Air transport, registered carrier departures worldwide
+We are using the code below to summarize the departures data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minAirDep=min(Air.Departures,na.rm=TRUE),
+          maxAirDep=max(Air.Departures,na.rm=TRUE),
+          meanAirDep=mean(Air.Departures,na.rm=TRUE),
+          medianAirDep=median(Air.Departures,na.rm=TRUE))
+```
+Analyzing the air departures (domestic takeoffs and takeoffs abroad) of a country can give us information about tourism in that country.  A country that is a popular tourist destination should be well-connected by air to all parts of the world  and therefore have more air departures that bring in tourists.
+
+It can be seen clearly from the air departures summary statistics that United States has the highest number of air departures with an average of 9.1 million. On the other hand, Nigeria has the lowest departures, average of 26,207.  This is not a surprising revelation since it is expected for developed countries like United States and United Kingdom, who can afford to have more registered domestic carriers, to see more air traffic than the underdeveloped countries. India, being an emerging economy is seen to have average air departures of 432,994, thus falling between the two ends of the spectrum. These findings reinforce our belief that US with most number of air departures, attracts many tourists.
+
+We used the code below to factor the category variable and derive quartile results for air departures.
+```{r, message=FALSE}
+AirDe<-data.frame(wdi.df$Air.Departures)
+AirDe %>%
+  mutate(Air.Departures.factor = make.ntiles(wdi.df.Air.Departures, 4)) %>%
+  {.} -> AirDe
+```
+
+Here is the quartile statistics for air departures indicator:
+```{r}
+summary(AirDe)
+```
+The quartile analysis of air departures suggests that Nigeria and India fall in the bottom quartile while United States alone falls in the top quartile with an average of 9.1 million number of air departures.
+
+One interesting observation worth noting is that the mean number of air departures of Nigeria (26,207) is much higher than its median (14,599.5). This implies that the distribution of the air departures is skewed to the right. In other words, most of the departures in Nigeria seem to be concentrated in the lower end.
+
+### 5.1.6 Improved sanitation facilities (% of population with access)
+We are using the code below to summarize the improved sanitation facilities data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minSanitaFc=min(Sanitation.Access,na.rm=TRUE),
+          maxSanitaFc=max(Sanitation.Access,na.rm=TRUE),
+          meanSanitaFc=mean(Sanitation.Access,na.rm=TRUE),
+          medianSanitaFc=median(Sanitation.Access,na.rm=TRUE))
+```
+Tourists to a country are sensitive to sanitation conditions. Specifically, it is rational to believe that the tourism industry of a country can be adversely impacted by poor sanitation conditions.
+
+We can observe how 99.85% population in developed countries (United States and United Kingdom) have access to improved sanitation, while Nigeria has a dismal figure of 32.13% population having the same. 
+
+We used the code below to factor the category variable and derive quartile results for improved sanitation facilities.
+```{r, message=FALSE}
+SanAcc<-data.frame(wdi.df$Sanitation.Access)
+SanAcc %>%
+  mutate(Sanitation.Access.factor = make.ntiles(wdi.df.Sanitation.Access, 4)) %>%
+  {.} -> SanAcc
+```
+
+Here is the quartile statistics for improved sanitiation facilities indicator:
+```{r}
+summary(SanAcc)
+```
+According to quartile statistics, United States and United Kingdom are in the top quartile with ~99% of their population having access to improved sanitation.
+
+A key takeaway from this summary would be India's unexpectedly poor performance on sanitation. Even though India is an emerging economy and is considered to be more economically advanced than Nigeria, it fares very poorly on the sanitation metric with just 31% of its population having access to improved sanitation. It can be inferred that the poor sanitation condition in India is a concerning issue for its tourism and efforts need be taken to improve it.
+
+### 5.1.7 Rail lines (total route-km)
+We are using the code below to summarize the rail lines data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minRail=min(Rail.Lines,na.rm=TRUE),
+          maxRail=max(Rail.Lines,na.rm=TRUE),
+          meanRail=mean(Rail.Lines,na.rm=TRUE),
+          medianRail=median(Rail.Lines,na.rm=TRUE))
+```
+The infrastructure of a country, especially its rail network is recognized to be very important for tourism development. The existence of an extensive rail network makes it easier for tourists to navigate within the country, thus boosting the tourism numbers.
+
+United States leads in terms of the total rail network present, with an average total rail route of 196,611 km. As has been seen for other variables like sanitation and air departures, Nigeria again performs poorly and ranks the lowest with just 3,520 km of rail lines. Therefore US attracts the most tourists among all six countries and Nigeria, the least.
+
+We used the code below to factor the category variable and derive quartile results for rail lines.
+```{r, message=FALSE}
+Rail<-data.frame(wdi.df$Rail.Lines)
+Rail %>%
+  mutate(Rail.Lines.factor = make.ntiles(wdi.df.Rail.Lines, 4)) %>%
+  {.} -> Rail
+```
+
+Here is the quartile statistics for rail lines indicator:
+```{r}
+summary(Rail)
+```
+we can see that United States alone lies in fourth quartile and Nigeria and United Kingdom lie in the first quartile, which indicates that there is a large rail line difference between United States and United Kingdom as well as Nigeria.
+
+The summary of rail lines however tells us that the total rail network in a country may not be a significant predictor of the level of tourism in a country. For instance, a country like United Kingdom which is more developed than India and China and is a tourist hot spot, has a mere 17,357 km of total rail route as a result of its small size (Note: Texas is almost three times larger than UK).
+
+### 5.1.8 International tourism, number of arrival
+We are using the code below to summarize the number of arrival data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minArrival=min(Number.of.arrivals,na.rm=TRUE),
+          maxArrival=max(Number.of.arrivals,na.rm=TRUE),
+          meanArrival=mean(Number.of.arrivals,na.rm=TRUE),
+          medianArrival=median(Number.of.arrivals,na.rm=TRUE))
+```
+As we run the statistics summary, the team found that United States has the most number of arrival flights with an average of 53.8 million and Nigeria has the lowest at 933 thousand. The team also noticed that South Africa, as a less developed country than India, has 7.3 million arrivals, whereas India has just 4.2 million arrivals annually. 
+
+We used the code below to factor the category variable and derive quartile results for the number of arrivals.
+```{r, message=FALSE}
+NumArr<-data.frame(wdi.df$Number.of.arrivals)
+NumArr %>%
+  mutate(Number.of.arrivals.factor = make.ntiles(wdi.df.Number.of.arrivals, 4)) %>%
+  {.} -> NumArr
+```
+Here is the quartile statistics for number of arrival indicator:
+```{r}
+summary(NumArr)
+```
+According to the quartile statistics, India and Nigeria falls under the first quartile and United Kingdom is in the third quartile.
+
+An interesting finding from this summary is that China being a developing country has 42.75 million average number of arrivals which is far more than United Kingdom. Developed countries are supposed to have more number of arrivals as they attract more tourists towards them. China being an outlier can be attributed to the fact that it is a major trading hub, hence has more number of flight arrivals than UK and ranks in the second position.
+
+### 5.1.9 Air Passengers carried
+We are using the code below to summarize the air passengers data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minAirPass=min(Air.passengers,na.rm=TRUE),
+          maxAirPass=max(Air.passengers,na.rm=TRUE),
+          meanAirPass=mean(Air.passengers,na.rm=TRUE),
+          medianAirPass=median(Air.passengers,na.rm=TRUE))
+```
+The data summary tells us that United States carries the maximum number of passengers with a mean of  680 million passengers. This result is resonable since United States also has the highest number of arrival flights according to the number of arrival statistics. 
+
+We used the code below to factor the category variable and derive quartile results for air passengers.
+```{r, message=FALSE}
+AirPa<-data.frame(wdi.df$Air.passengers)
+AirPa %>%
+  mutate(Air.passengers.factor = make.ntiles(wdi.df.Air.passengers, 4)) %>%
+  {.} -> AirPa
+```
+
+Here is the quartile statistics for air passengers indicator:
+```{r}
+summary(AirPa)
+```
+China ranks the second (average of 179.6 million) for this indicator, partialy due to the large population of China. India lies in the second quartile with an average of 42.5 million. Nigeria and South Africa, as less developed countries, have less amount of infrastructure related to aviation, thus have less passengers carried.
+
+### 5.1.10 Foreign direct investment, net inflows (BoP, current US$)
+We are using the code below to summarize the air passengers data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minFDI=min(Tourism.FDI,na.rm=TRUE),
+          maxFDI=max(Tourism.FDI,na.rm=TRUE),
+          meanFDI=mean(Tourism.FDI,na.rm=TRUE),
+          medianFDI=median(Tourism.FDI,na.rm=TRUE))
+```
+Development of a tourism industry requires investment in infrastructure, including transport, utilities and telecommunications. Where developing countries lack the necessary capital, technology or knowledge, FDI is regarded as a way of filling the gap. Besides that FDI in hotels and tourism is becoming very popular. Many worldwide hotel groups are setting up their businesses abroad and many global tour operators are establishing operations in different countries. Therefore, FDI inflow should impact the growth in tourism. 
+
+We used the code below to factor the category variable and derive quartile results for foreign direct investment.
+```{r, message=FALSE}
+Tfdi<-data.frame(wdi.df$Tourism.FDI)
+Tfdi %>%
+  mutate(Tourism.FDI.factor = make.ntiles(wdi.df.Tourism.FDI, 4)) %>%
+  {.} -> Tfdi
+```
+
+Here is the quartile statistics for foreign direct investment indicator:
+```{r}
+summary(Tfdi)
+```
+Nigeria falls in the first quartile. India and South Africa fall in the second quartile. China and United Kingdom fall in the third quartile and United States fall in the fourth quartile.
+
+Data from the world bank suggests that US has the highest FDI inflow of $222.38 billion followed by China, UK and India. Low FDI inflow of $4.06 billion in Nigeria and $3.86 billion in South Africa indicates that they've got less foreign investment for infrastructure, hotels, and tourism compared with more developed countries.
+
+### 5.1.11 Travel services (% of commercial service imports)
+We are using the code below to summarize the travel services data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minTraSer=min(Tourism.travelServices,na.rm=TRUE),
+          maxTraSer=max(Tourism.travelServices,na.rm=TRUE),
+          meanTraSer=mean(Tourism.travelServices,na.rm=TRUE),
+          medianTraSer=median(Tourism.travelServices,na.rm=TRUE))
+```
+The travel services indicator represents the goods and services acquired by travelers, shown as a percentage of commercial service imports. Data summary shows that South Africa generates the highest percent of travel services imports from commercial service imports, which is 57.35 percent. After South Africa, we have China, United States, India, United Kingdom, and Nigeria at 29.02, 27.4, 14.45, 13.34 and 7 percent respectively. 
+
+We used the code below to factor the category variable and derive quartile results for travel services.
+```{r, message=FALSE}
+TraServ<-data.frame(wdi.df$Tourism.travelServices)
+TraServ %>%
+  mutate(Tourism.travelServices.factor = make.ntiles(wdi.df.Tourism.travelServices, 4)) %>%
+  {.} -> TraServ
+```
+
+Here is the quartile statistics for travel services indicator:
+```{r}
+summary(TraServ)
+```
+United Kingdom, Nigeria and India fall in the second quartile. China and South Africa fall in the third quartile and fourth quartile respectively.
+
+From these data results, we can learn that South Africa, China, and United States have a higher percent of travel services than India, Nigeria, and United Kingdom. However, we need to take account other factors influening travel services as well. For example, travelers may visit countries (such as China) for business reasons. Therefore these earnings from travel services include not only money generated from tourism but also money generated from business trips. 
+
+### 5.1.12 Services, etc., value added (current US$)
+We are using the code below to summarize the services data.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          minService=min(Tourism.services,na.rm=TRUE),
+          maxService=max(Tourism.services,na.rm=TRUE),
+          meanService=mean(Tourism.services,na.rm=TRUE),
+          medianService=median(Tourism.services,na.rm=TRUE))
+```
+This indicator includes the value added in wholesale and retail trade (including hotels and restaurants). An addition of value in hotels and restaurants should have a direct positive impact on the tourism industry. However, it needs to be noted that this data is not indicative of the money that has already been invested in hotels and restaurants. Data from the world bank suggests that tourism might be growing at a fast rate in United States (value added - around $9.7 trillion), Nigeria (around $89 billion) and India (value added - around $491 billion) .
+
+We used the code below to factor the category variable and derive quartile results for services.
+```{r, message=FALSE}
+Tser<-data.frame(wdi.df$Tourism.services)
+Tser %>%
+  mutate(Tourism.services.factor = make.ntiles(wdi.df.Tourism.services, 4)) %>%
+  {.} -> Tser
+```
+
+Here is the quartile statistics for services indicator:
+```{r}
+summary(Tser)
+```
+Nigeria, South Africa and India fall in the second quartile. China and United Kingdom fall in the third quartile and United States falls in the fourth quartile.
+
+## 5.2 Indicators Relationship Findings
+The team grouped several indicators and conducted comparison to find some relationship among these indicators.
+
+### 5.2.1 Tourism Expenditure, Tourism Receipts, GDP per capita
+The code below grouped the mean value of tourism expenditure, tourism receipts, and GDP per capita to make comparison and find relationships.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          meanTouExp=mean(Tourism.Expenditure.travel,na.rm=TRUE),
+          meanTouRec=mean(Tourism.Receipts,na.rm=TRUE),
+          meanGDPper=mean(GDP.per.capita,na.rm=TRUE))
+```
+By comparing average tourism receipts, tourism expenditure, and GDP per capita, the team found that United States ranks at the top among these categories. This implies that United States, as a developed country, attracts many visitors to spend money in the country and people from United States have a large expenditure on travel. Additionally, United States has the highest GDP per capita and GDP can reflect the overall economy status of a country. Therefore, the high tourism expenditure and receipts might play an essential role in the economy of a country.
+
+### 5.2.2 Tourism Receipts, Unemployment Rate
+The code below grouped the mean value of tourism receipts and unemployment rate to make comparison and find relationships.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+          meanTouRec=mean(Tourism.Receipts,na.rm=TRUE),
+          meanUnempRt=mean(Unemployment.Rate,na.rm=TRUE))
+```
+From the tourism and employment rate perspective, United States and United Kingdom have higher average tourism expenditures and receipts than India and China, but the unemployment rate of these two countries are slightly higher than developing countries, India and China. Therefore, even though tourism may provide more jobs for the country, there are still other factors that might influence unemployment rate. 
+
+### 5.2.3 Air Departures, Sanitation Facilities Access, Rail Lines
+The code below grouped the mean value of air departures, sanitation facilities access, and rail lines to make comparison and find relationships.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+             meanAirTrans=mean(Air.Departures,na.rm=TRUE),
+             meanSan=mean(Sanitation.Access,na.rm=TRUE),
+             meanRail=mean(Rail.Lines,na.rm=TRUE))
+```
+By comparing the mean of air departures, percentage of people with access to sanitation and the rail-lines of the six chosen countries, we observe that United States leads the rest on all three dimensions. Developed countries like United States and United Kingdom are observed to be performing well above average on all the three factors simultaneously. Similarly an underdeveloped country Nigeria is underperforming on all three factors. From the tourism receipts statistics, UK and US are attracting more visitors than the rest of the chosen countries. Thus, we may believe that developed countries that perform well on these factors, may be attracting more tourists on account of their ability to connect tourists to all parts of the world and their improved hygiene conditions.
+
+### 5.2.4 Foreign Direct Investment, Number of Arrival
+The code below grouped the mean value of air departures, sanitation facilities access, and rail lines to make comparison and find relationships.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+             meanFDI=mean(Tourism.FDI,na.rm=TRUE),
+             meanArrival=mean(Number.of.arrivals,na.rm=TRUE))
+```
+Over the years, Foreign Direct Investment (FDI) has become very prevalent in the hotel industry. By observing the mean values of these variables for the chosen countries, we realize that as FDI in a country increases so does the number of people arriving in that country. However, there is an exception to the above stated relationship. Even though FDI is greater in South Africa as compared to India, the number of people arriving is higher in India. This could be attributed to the fact that India's population (1.31 billion) is much higher compared to that of South Africa (54.8 million) and India is 2.69 times bigger than South Africa.
+
+### 5.2.5 Travel Services, Value Added Services, Tourism Receipts
+The code below grouped the mean value of travel services, value added services, and tourism receipts to make comparison and find relationships.
+```{r}
+summarize(group_by(wdi.df, country.name, country.code), 
+             meanTraSer=mean(Tourism.travelServices,na.rm=TRUE),
+             meanService=mean(Tourism.services,na.rm=TRUE))
+```
+
+Travel services include services acquired by travelers in that economy for their own use during visits for business or personal purposes. Considering travel services include the goods and services consumed by travelers, such as lodging, meals, and transport, the values for travel services should be in sync with the values for receipts as receipts tell us about the expenditure done by inbound visitors. However, the lack of direct correlation from the data could be attributed towards the fact that the travel services indicator is the % of commercial service imports acquired by the travelers and the receipts value is in dollars and is not being expressed as a percentage. Therefore, probably it is not right to compare these two indicators.
+
+A comparison between the services and the receipts indicator shows that, as an economy, South Africa, China and US acquire a lot of money from travelers but besides US, South Africa and China don't necessarily spend a lot on improving the services they offer. However, India and Nigeria are at the top of the list amongst these six countries for trying to improve their services. There is no direct correlation but it would be best to improve the money spent on services to improve tourism.
+
+# 6. Findings and Conclusions
+Through the process of summarizing these variables and doing quartile analysis, we found that United States and United Kingdom rank higher than the less developed countries on most categories, which are tourism receipts, tourism expenditure, GDP per capita, air departures, improved sanitation facilities, number of international arrivals, air passengers carried, foreign direct investment, and value added services. 
+
+Our findings suggest that there exists a positive correlation between tourism expenditures and factors such as air departures, percentage access to improved sanitation and the total length of rail-lines. Developed countries, United States and United Kingdom, have good sanitation facilities and extensive rail network, which contribute to their competent tourism status. Therefore, if an underdeveloped country like Nigeria wishes to boost its tourism, it must focus on improving its performance on factors such as infrastructure (rail, air) and sanitation facilities.
+
+Additionally, we observed a direct relationship between Foreign Direct Investment (FDI) and growth in tourism. Developed countries have better FDI and tourism as compared to the developing or under-developed countries. Hence, increased FDI in hotels and restaurants can also benefit developing and underdeveloped nations. 
+
+As a result of all the statistical analysis, we conclude that developed countries seem to be more advanced than less developed countries in areas of economy, tourism, and environment. Attributes such as better infrastructure, improved sanitation, high Foreign Direct Investment, large number of air departures and passengers, attract tourists and help improve the overall growth of tourism.
+
+
